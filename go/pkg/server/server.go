@@ -3,16 +3,17 @@ package server
 import (
 	"log"
 	"net"
+	"strings"
 )
 
+// TODO: add configuration options
 const listeningAddr = ":5000"
 const maxPacketSize = 1024
 
 const udpNetworkName = "udp"
 
 var conn *net.UDPConn
-
-var identifiers map[string][]string
+var addrStore addressStore
 
 func init() {
 	addr, err := net.ResolveUDPAddr(udpNetworkName, listeningAddr)
@@ -25,27 +26,42 @@ func init() {
 		panic(err)
 	}
 
+	addrStore = identifierAddrMap{make(map[string][]string)}
 }
 
-func listen() {
-	buffer := make([]byte, 2 * maxPacketSize)
+func ListenAndServe() {
+	buffer := make([]byte, 2*maxPacketSize)
 
 	for {
-		// TODO: put this in goroutines later
-		n, addr, err := conn.ReadFromUDP(buffer)
-		if err != nil {
-			// TODO: change logging option later (uber zap logging with logr)
-			log.Printf("error: ip %v; port %v: %v", addr.IP, addr.Port, err)
-		}
-		if n > maxPacketSize {
-			log.Printf("warn: ip %v; port %v: message with %d bytes exceeded max packet size (%d bytes)", addr.IP, addr.Port, n, maxPacketSize)
-		}
-
-		id := string(buffer)
-
+		handleConnection(buffer)
 	}
 }
 
-func fetchAddr(id, except string) {
-	
+func handleConnection(buffer []byte) {
+	// TODO: put this in goroutines later
+	n, addr, err := conn.ReadFromUDP(buffer)
+	if err != nil {
+		// TODO: change logging option later (uber zap logging with logr)
+		log.Printf("error: listening address %s: %v", conn.RemoteAddr().String(), err)
+		return
+	}
+	if n > maxPacketSize {
+		log.Printf("warn: package by %s: message with %d bytes exceeded max packet size of %d bytes", addr.String(), n, maxPacketSize)
+		return
+	}
+
+	id := string(buffer[:n])
+
+	remoteAddrs, err := addrStore.FetchAddresses(id, addr.String())
+	if err != nil {
+		log.Printf("error: %v", err)
+		return
+	}
+
+	payload := strings.Join(remoteAddrs, ",")
+	_, err = conn.WriteToUDP([]byte(payload), addr)
+	if err != nil {
+		log.Printf("error: writing to socket listening on %s: %v", conn.RemoteAddr().String(), err)
+		return
+	}
 }
