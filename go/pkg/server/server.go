@@ -52,9 +52,9 @@ func handleConnection(buffer []byte) {
 
 	id := string(buffer[:n])
 
-	remoteAddrs, err := addrStore.FetchAddresses(id, addr.String())
+	remoteAddrs, err := addrStore.ProcessAddress(id, addr.String())
 	if err != nil {
-		log.Printf("error: %v", err)
+		log.Println(err)
 		return
 	}
 
