@@ -64,4 +64,6 @@ func handleConnection(buffer []byte) {
 		log.Printf("error: writing to socket listening on %s: %v", conn.RemoteAddr().String(), err)
 		return
 	}
+
+	log.Printf("info: wrote package to %s with payload %s", addr.String(), payload)
 }
