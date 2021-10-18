@@ -3,7 +3,7 @@ package server
 // TODO: maybe refactor this to one method later (if using databases [to make transactions])
 type addressStore interface {
 
-    // ProcessAddress takes an identifier id (of peer connections) and returns all addresses registered to that id except addr.
+    // ProcessAddress takes a domain id (of peer connections) and returns all addresses registered to that id except addr.
     // Furthermore, this method associates addr to id.
     // All occurrences of addr should be removed in the returned slice, i.e. the return slice should not contain addr.
     // An empty return slice is not an error case. A non-existent identifier should return an empty slice.
@@ -11,11 +11,11 @@ type addressStore interface {
 }
 
 // TODO: add timestamp / max size functionality to remove old/too many connections
-type identifierAddrMap struct {
+type domainAddrMap struct {
     m map[string][]string
 }
 
-func (idm identifierAddrMap) ProcessAddress(id, addr string) ([]string, error) {
+func (idm domainAddrMap) ProcessAddress(id, addr string) ([]string, error) {
     var ret []string
 
     s, ok := idm.m[id]
@@ -41,5 +41,5 @@ func (idm identifierAddrMap) ProcessAddress(id, addr string) ([]string, error) {
     ret[i] = addr
     idm.m[id] = ret
 
-    return ret, nil
+    return ret[:i], nil
 }

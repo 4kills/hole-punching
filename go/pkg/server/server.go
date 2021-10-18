@@ -26,7 +26,7 @@ func init() {
 		panic(err)
 	}
 
-	addrStore = identifierAddrMap{make(map[string][]string)}
+	addrStore = domainAddrMap{make(map[string][]string)}
 }
 
 func ListenAndServe() {
