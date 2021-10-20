@@ -17,19 +17,19 @@ const network = "udp"
 
 var timeout = time.Second * 3
 
-func Connect(id []byte, wellKnown string, expected int) ([]*net.UDPConn, error) {
+func Connect(id []byte, wellKnown string, expected int) ([]*net.UDPAddr, error) {
     wellKnownUPD, err := net.ResolveUDPAddr(network, wellKnown)
     if err != nil {
         return nil, err
     }
-    wellKnownConn, err := net.DialUDP(network, nil, wellKnownUPD)
+    wellKnownConn, err := net.ListenUDP(network, wellKnownUPD) // TODO: change this to listenUDP
     if err != nil {
         return nil, err
     }
     defer wellKnownConn.Close()
 
     readBuffer := make([]byte, 1 << 16)
-    var remConns []*net.UDPConn
+    var remConns []*net.UDPAddr
 
     // TODO add max tries/deadline/timeout
     for {
@@ -50,7 +50,7 @@ func Connect(id []byte, wellKnown string, expected int) ([]*net.UDPConn, error) 
             continue
         }
 
-        remConns, err = parse(readBuffer[:n], wellKnownConn.LocalAddr().(*net.UDPAddr))
+        remConns, err = parse(readBuffer[:n])
         if err != nil {
             return nil, err
         }
@@ -63,7 +63,7 @@ func Connect(id []byte, wellKnown string, expected int) ([]*net.UDPConn, error) 
     wg := &sync.WaitGroup{}
     for _, c := range remConns {
         wg.Add(1)
-        go connectIndividual(c, wg)
+        go connectIndividual(c, wellKnownConn, wg)
     }
 
     wg.Wait()
@@ -71,20 +71,22 @@ func Connect(id []byte, wellKnown string, expected int) ([]*net.UDPConn, error) 
     return remConns, nil
 }
 
-func connectIndividual(conn *net.UDPConn, wg *sync.WaitGroup) {
+func connectIndividual(conn *net.UDPAddr, socket *net.UDPConn, wg *sync.WaitGroup) {
     readBuffer := make([]byte, 1 << 16) // TODO: adjust size
 
     // TODO: add deadline/ max tries here
     for {
-        fmt.Println("Try sending packet to " + conn.RemoteAddr().String()) // TODO: remove this
+        fmt.Println("Try sending packet to " + conn.String()) // TODO: remove this
         // TODO: change "Hello" to something that makes sense
-        _, err := io.Copy(conn, bytes.NewBuffer([]byte("Hello")))
+        _, err := socket.WriteToUDP([]byte("Hello"), conn)
+
         if err != nil {
             panic(err) // TODO: change this behavior to sth sensical
         }
 
-        conn.SetReadDeadline(time.Now().Add(timeout))
-        n, _, err := conn.ReadFromUDP(readBuffer)
+        // TODO: deadline wont work across multiple goroutines simultaneously
+        socket.SetReadDeadline(time.Now().Add(timeout))
+        n, _, err := socket.ReadFromUDP(readBuffer)
         log.Println("listening for packet: error:", err )
         if errors.Is(err, os.ErrDeadlineExceeded) {
             continue
@@ -101,18 +103,16 @@ func connectIndividual(conn *net.UDPConn, wg *sync.WaitGroup) {
     wg.Done()
 }
 
-func parse(content []byte, laddr *net.UDPAddr) ([]*net.UDPConn, error) {
+func parse(content []byte) ([]*net.UDPAddr, error) {
     rawAddrs := strings.Split(string(content), ",")
-    ret := make([]*net.UDPConn, len(rawAddrs))
+    ret := make([]*net.UDPAddr, len(rawAddrs))
 
     for i, v := range rawAddrs {
-        vUDP, err := net.ResolveUDPAddr(network, v)
+        addr, err := net.ResolveUDPAddr(network, v)
         if err != nil {
             return ret, err
         }
-        if ret[i], err = net.DialUDP(network, laddr, vUDP); err != nil {
-            return ret, err
-        }
+        ret[i] = addr
     }
 
     return ret, nil
