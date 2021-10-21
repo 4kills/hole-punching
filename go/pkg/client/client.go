@@ -1,10 +1,8 @@
 package client
 
 import (
-    "bytes"
     "errors"
     "fmt"
-    "io"
     "log"
     "net"
     "os"
@@ -22,11 +20,12 @@ func Connect(id []byte, wellKnown string, expected int) ([]*net.UDPAddr, error) 
     if err != nil {
         return nil, err
     }
-    wellKnownConn, err := net.ListenUDP(network, wellKnownUPD) // TODO: change this to listenUDP
+
+    socket, err := net.ListenUDP(network, &net.UDPAddr{}) // TODO: change this to listenUDP
     if err != nil {
         return nil, err
     }
-    defer wellKnownConn.Close()
+    defer socket.Close()
 
     readBuffer := make([]byte, 1 << 16)
     var remConns []*net.UDPAddr
@@ -34,13 +33,13 @@ func Connect(id []byte, wellKnown string, expected int) ([]*net.UDPAddr, error) 
     // TODO add max tries/deadline/timeout
     for {
         fmt.Println("Try") // TODO: remove this later
-        _, err = io.Copy(wellKnownConn, bytes.NewBuffer(id))
+        _, err = socket.WriteToUDP(id, wellKnownUPD)
         if err != nil {
             return nil, err
         }
 
-        wellKnownConn.SetReadDeadline(time.Now().Add(timeout))
-        n, _, err := wellKnownConn.ReadFromUDP(readBuffer)
+        socket.SetReadDeadline(time.Now().Add(timeout))
+        n, _, err := socket.ReadFromUDP(readBuffer)
         if errors.Is(err, os.ErrDeadlineExceeded) {
             continue
         } else if err != nil {
@@ -63,7 +62,7 @@ func Connect(id []byte, wellKnown string, expected int) ([]*net.UDPAddr, error) 
     wg := &sync.WaitGroup{}
     for _, c := range remConns {
         wg.Add(1)
-        go connectIndividual(c, wellKnownConn, wg)
+        go connectIndividual(c, socket, wg)
     }
 
     wg.Wait()
@@ -79,7 +78,6 @@ func connectIndividual(conn *net.UDPAddr, socket *net.UDPConn, wg *sync.WaitGrou
         fmt.Println("Try sending packet to " + conn.String()) // TODO: remove this
         // TODO: change "Hello" to something that makes sense
         _, err := socket.WriteToUDP([]byte("Hello"), conn)
-
         if err != nil {
             panic(err) // TODO: change this behavior to sth sensical
         }
