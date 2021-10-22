@@ -3,6 +3,7 @@ package server
 import (
 	"net"
 	"strings"
+	"sync"
 )
 
 // TODO: add configuration options
@@ -25,31 +26,30 @@ func init() {
 		panic(err)
 	}
 
-	addrStore = domainAddrMap{make(map[string][]string)}
+	SetAddressStore(domainAddrMap{make(map[string][]string), &sync.Mutex{}})
 }
 
 func ListenAndServe() {
-	buffer := make([]byte, 2*maxPacketSize)
+	buffer := make([]byte, 2 * maxPacketSize)
 
 	for {
-		handleConnection(buffer)
+		n, addr, err := conn.ReadFromUDP(buffer)
+		if err != nil {
+			log.Error(err, "read from udp with remote address: rejecting address", logKeyAddr, addr.String())
+			return
+		}
+		if n > maxPacketSize {
+			log.V(1).Info( "package payload by remote address with messageLength bytes exceeded maxPacketSize: rejecting address.", logKeyAddr, addr.String(), "messageLength", n, "maxPacketSize", maxPacketSize)
+			return
+		}
+
+		id := string(buffer[:n])
+
+		go handleConnection(id, addr)
 	}
 }
 
-func handleConnection(buffer []byte) {
-	// TODO: put this in goroutines later
-	n, addr, err := conn.ReadFromUDP(buffer)
-	if err != nil {
-		log.Error(err, "read from udp with remote address: rejecting address", logKeyAddr, addr.String())
-		return
-	}
-	if n > maxPacketSize {
-		log.V(1).Info( "package by remote address with messageLength bytes exceeded maxPacketSize: rejecting address.", logKeyAddr, addr.String(), "messageLength", n, "maxPacketSize", maxPacketSize)
-		return
-	}
-
-	id := string(buffer[:n])
-
+func handleConnection(id string, addr *net.UDPAddr) {
 	remoteAddrs, err := addrStore.ProcessAddress(id, addr.String())
 	if err != nil {
 		log.Error(err, "could not store address: rejecting address", logKeyAddr, addr.String())
