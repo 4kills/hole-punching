@@ -1,7 +1,6 @@
 package server
 
 import (
-	"log"
 	"net"
 	"strings"
 )
@@ -13,7 +12,7 @@ const maxPacketSize = 1024
 const udpNetworkName = "udp"
 
 var conn *net.UDPConn
-var addrStore addressStore
+var addrStore AddressStore
 
 func init() {
 	addr, err := net.ResolveUDPAddr(udpNetworkName, listeningAddr)
@@ -41,12 +40,11 @@ func handleConnection(buffer []byte) {
 	// TODO: put this in goroutines later
 	n, addr, err := conn.ReadFromUDP(buffer)
 	if err != nil {
-		// TODO: change logging option later (uber zap logging with logr)
-		log.Printf("error: listening address %s: %v", conn.RemoteAddr().String(), err)
+		log.Error(err, "read from udp with remote address: rejecting address", logKeyAddr, addr.String())
 		return
 	}
 	if n > maxPacketSize {
-		log.Printf("warn: package by %s: message with %d bytes exceeded max packet size of %d bytes", addr.String(), n, maxPacketSize)
+		log.V(1).Info( "package by remote address with messageLength bytes exceeded maxPacketSize: rejecting address.", logKeyAddr, addr.String(), "messageLength", n, "maxPacketSize", maxPacketSize)
 		return
 	}
 
@@ -54,16 +52,16 @@ func handleConnection(buffer []byte) {
 
 	remoteAddrs, err := addrStore.ProcessAddress(id, addr.String())
 	if err != nil {
-		log.Println(err)
+		log.Error(err, "could not store address: rejecting address", logKeyAddr, addr.String())
 		return
 	}
 
 	payload := strings.Join(remoteAddrs, ",")
 	_, err = conn.WriteToUDP([]byte(payload), addr)
 	if err != nil {
-		log.Printf("error: writing to socket listening on %s: %v", conn.RemoteAddr().String(), err)
+		log.Error(err, "writing to remote address ; socket listening on port", logKeyAddr, addr.String(), "port", conn.RemoteAddr().String())
 		return
 	}
 
-	log.Printf("info: wrote package to %s with payload %s", addr.String(), payload)
+	log.V(1).Info("wrote package to address with payload", logKeyAddr, addr.String(), "payload", payload)
 }

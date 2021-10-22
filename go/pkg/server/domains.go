@@ -1,7 +1,7 @@
 package server
 
-// TODO: maybe refactor this to one method later (if using databases [to make transactions])
-type addressStore interface {
+// AddressStore stores addresses with domain ids and allows to process those.
+type AddressStore interface {
 
     // ProcessAddress takes a domain id (of peer connections) and returns all addresses registered to that id except addr.
     // Furthermore, this method associates addr to id.
