@@ -11,7 +11,7 @@ type AddressStore interface {
     // An empty return slice is not an error case. A non-existent identifier should return an empty slice.
     //
     // ProcessAddress should be safe for concurrent use.
-    ProcessAddress(id string, exceptAddr string) ([]string, error)
+    ProcessAddress(id string, addr string) ([]string, error)
 }
 
 func SetAddressStore(store AddressStore) {
