@@ -36,11 +36,11 @@ func ListenAndServe() {
 		n, addr, err := conn.ReadFromUDP(buffer)
 		if err != nil {
 			log.Error(err, "read from udp with remote address: rejecting address", logKeyAddr, addr.String())
-			return
+			continue
 		}
 		if n > maxPacketSize {
 			log.V(1).Info( "package payload by remote address with messageLength bytes exceeded maxPacketSize: rejecting address.", logKeyAddr, addr.String(), "messageLength", n, "maxPacketSize", maxPacketSize)
-			return
+			continue
 		}
 
 		id := string(buffer[:n])
