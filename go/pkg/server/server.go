@@ -4,6 +4,7 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"time"
 )
 
 // TODO: add configuration options
@@ -14,6 +15,10 @@ const udpNetworkName = "udp"
 
 var conn *net.UDPConn
 var addrStore AddressStore
+
+type server struct {
+	DomainTimeout time.Duration
+}
 
 func init() {
 	addr, err := net.ResolveUDPAddr(udpNetworkName, listeningAddr)
@@ -26,7 +31,7 @@ func init() {
 		panic(err)
 	}
 
-	SetAddressStore(domainAddrMap{make(map[string][]string), &sync.Mutex{}})
+	SetAddressStore(domainAddrMap{make(map[string][]string), &sync.Mutex{}, 1 * time.Minute})
 }
 
 func ListenAndServe() {
