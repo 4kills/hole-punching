@@ -56,6 +56,7 @@ func New(listeningAddr string) (server, error) {
 
 // ListenAndServe starts the server, listening to server.ListeningAddr and handling inbound packets.
 func (s server) ListenAndServe() {
+	s.log.V(1).Info("server started")
 	buffer := make([]byte, 2 * s.MaxPacketSize)
 
 	for {
