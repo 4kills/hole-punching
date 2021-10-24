@@ -1,0 +1,11 @@
+version: "3"
+
+services:
+  hole_punching_server:
+    build:
+      context: ..
+      dockerfile: build/package/Dockerfile
+    container_name: hole_punching_server
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
