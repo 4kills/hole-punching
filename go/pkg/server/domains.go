@@ -12,28 +12,23 @@ type AddressStore interface {
     // All occurrences of addr should be removed in the returned slice, i.e. the return slice should not contain addr.
     // An empty return slice is not an error case. A non-existent identifier should return an empty slice.
     //
-    // ProcessAddress should be safe for concurrent use.
+    // This method should be safe for concurrent use.
     //
-    // ProcessAddress can also be used for clearing a domain (or individual address) from the AddressStore.
-    ProcessAddress(id string, addr string) ([]string, error)
+    // ProcessAddress deletes addr from domain id after timeout if timeout is non-negative. If timeout is negative,
+    // nothing should be deleted.
+    ProcessAddress(id string, addr string, timeout time.Duration) ([]string, error)
 }
 
-func SetAddressStore(store AddressStore) {
-    addrStore = store
-}
-
-// TODO: add timestamp / max size functionality to remove old/too many connections
 type domainAddrMap struct {
     m map[string][]string
     mutex *sync.Mutex
-    timeout time.Duration
 }
 
-func (idm domainAddrMap) ProcessAddress(id, addr string) ([]string, error) {
+func (idm domainAddrMap) ProcessAddress(id, addr string, timeout time.Duration) ([]string, error) {
     idm.mutex.Lock()
     defer idm.mutex.Unlock()
 
-    defer func() {go idm.clear(id, addr)}()
+    defer func() {go idm.clear(id, addr, timeout)}()
 
     var ret []string
 
@@ -63,8 +58,13 @@ func (idm domainAddrMap) ProcessAddress(id, addr string) ([]string, error) {
     return ret[:i], nil
 }
 
-func (idm domainAddrMap) clear(id string, addr string) {
-    time.Sleep(idm.timeout)
+// clear removes addr from domain id after timeout. If timeout is negative, clear is not
+// executed. If the last addr of a domain id is removed, the map key id is deleted altogether.
+func (idm domainAddrMap) clear(id string, addr string, timeout time.Duration) {
+    if timeout < 0 {
+        return
+    }
+    time.Sleep(timeout)
 
     idm.mutex.Lock()
     defer idm.mutex.Unlock()

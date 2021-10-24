@@ -93,7 +93,7 @@ func TestDomainAddrMap_ProcessAddress(t *testing.T) {
 	for _, tc := range tt {
 		addrStore := domainAddrMap{m: tc.m}
 
-		s, err := addrStore.ProcessAddress(tc.domain, tc.addr)
+		s, err := addrStore.ProcessAddress(tc.domain, tc.addr, -1)
 		if err != nil {
 			t.Fatal(err)
 		}
