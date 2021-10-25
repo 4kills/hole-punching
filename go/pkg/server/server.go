@@ -25,8 +25,8 @@ type server struct {
 	MaxPacketSize int
 
 	keepAlive time.Duration
-	log logr.Logger
-  	conn *net.UDPConn
+	log    logr.Logger
+  	socket *net.UDPConn
 }
 
 // New constructs a default server listening to listeningAddr with a Go map as server.AddrStore implementation and
@@ -48,7 +48,7 @@ func New(listeningAddr string) (server, error) {
 		return s, err
 	}
 
-	s.conn, err = net.ListenUDP(udpNetworkName, addr)
+	s.socket, err = net.ListenUDP(udpNetworkName, addr)
 	if err != nil {
 		return s, err
 	}
@@ -65,7 +65,7 @@ func (s server) ListenAndServe() {
 	go s.sendKeepAlives()
 
 	for {
-		n, addr, err := s.conn.ReadFromUDP(buffer)
+		n, addr, err := s.socket.ReadFromUDP(buffer)
 		if err != nil {
 			s.log.Error(err, "read from udp with remote address: rejecting address", logKeyAddr, addr.String())
 			continue
@@ -90,9 +90,9 @@ func (s server) handleConnection(id string, addr *net.UDPAddr) {
 	}
 
 	payload := strings.Join(remoteAddrs, ",")
-	_, err = s.conn.WriteToUDP([]byte(payload), addr)
+	_, err = s.socket.WriteToUDP([]byte(payload), addr)
 	if err != nil {
-		s.log.Error(err, "writing to remote address ; socket listening on port", logKeyAddr, addr.String(), "port", s.conn.RemoteAddr().String())
+		s.log.Error(err, "writing to remote address ; socket listening on port", logKeyAddr, addr.String(), "port", s.socket.RemoteAddr().String())
 		return
 	}
 
@@ -107,6 +107,7 @@ func (s server) sendKeepAlives() {
 	// TODO: optimize this to not send all packets at once
 	for {
 		time.Sleep(s.keepAlive)
+		s.log.V(1).Info("sending keep-alive packets")
 
 		addrs, err := s.AddrStore.FetchAllAddresses()
 		if err != nil {
@@ -121,7 +122,7 @@ func (s server) sendKeepAlives() {
 				continue
 			}
 
-			_, err = s.conn.WriteToUDP([]byte{}, addr)
+			_, err = s.socket.WriteToUDP([]byte{}, addr)
 			if err != nil {
 				s.log.Error(err, "could not write to udp while trying to send keep alive packet, skipping for now", logKeyAddr, addr)
 				continue
