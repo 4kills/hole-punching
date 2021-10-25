@@ -42,7 +42,7 @@ func (idm domainAddrMap) FetchAllAddresses() ([]string, error) {
     // reallocates array if it is nil, 4 times too large and larger than 1024 or if it doesn't suffice to store all addresses
     if idm.allAddr == nil || (4 * c <= len(idm.allAddr) && c > 1024 || c > len(idm.allAddr)) {
         n := math.Max(float64(c), 1024)
-        idm.allAddr = make([]string, 2 * n)
+        idm.allAddr = make([]string, 2 * int(n))
     }
 
     i := 0
