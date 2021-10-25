@@ -1,6 +1,7 @@
 package server
 
 import (
+    "math"
     "sync"
     "time"
 )
@@ -17,11 +18,42 @@ type AddressStore interface {
     // ProcessAddress deletes addr from domain id after timeout if timeout is non-negative. If timeout is negative,
     // nothing should be deleted.
     ProcessAddress(id string, addr string, timeout time.Duration) ([]string, error)
+
+    // FetchAllAddresses returns all addresses currently in the address store as []string or an error.
+    // This method must be safe for concurrent use with AddressStore.ProcessAddress.
+    FetchAllAddresses() ([]string, error)
 }
 
 type domainAddrMap struct {
     m map[string][]string
     mutex *sync.Mutex
+    allAddr []string
+}
+
+func (idm domainAddrMap) FetchAllAddresses() ([]string, error) {
+    idm.mutex.Lock()
+    defer idm.mutex.Unlock()
+
+    c := 0
+    for _, v := range idm.m {
+        c += len(v)
+    }
+
+    // reallocates array if it is nil, 4 times too large and larger than 1024 or if it doesn't suffice to store all addresses
+    if idm.allAddr == nil || (4 * c <= len(idm.allAddr) && c > 1024 || c > len(idm.allAddr)) {
+        n := math.Max(float64(c), 1024)
+        idm.allAddr = make([]string, 2 * n)
+    }
+
+    i := 0
+    for _, v := range idm.m {
+        for _, addr := range v {
+            idm.allAddr[i] = addr
+            i++
+        }
+    }
+
+    return idm.allAddr[:c], nil
 }
 
 func (idm domainAddrMap) ProcessAddress(id, addr string, timeout time.Duration) ([]string, error) {

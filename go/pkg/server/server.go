@@ -24,19 +24,21 @@ type server struct {
 	// If a packet's payload length exceeds MaxPacketSize, the packet is dropped and not processed.
 	MaxPacketSize int
 
+	keepAlive time.Duration
 	log logr.Logger
   	conn *net.UDPConn
 }
 
 // New constructs a default server listening to listeningAddr with a Go map as server.AddrStore implementation and
 // the Go standard log package as logr.Logger.
-// It is strongly recommended to review the server.DomainTimeout field.
+// It is strongly recommended reviewing the server.DomainTimeout field.
 func New(listeningAddr string) (server, error) {
 	s := server{
 		ListeningAddr: listeningAddr,
-		DomainTimeout: 1 * time.Hour,
+		DomainTimeout: 2 * time.Minute,
+		keepAlive: 10 * time.Second,
 		MaxPacketSize: 1024,
-		AddrStore:     domainAddrMap{make(map[string][]string), &sync.Mutex{}},
+		AddrStore:     domainAddrMap{make(map[string][]string), &sync.Mutex{}, make([]string, 1024)},
 
 		log: stdr.New(nil),
 	}
@@ -54,10 +56,13 @@ func New(listeningAddr string) (server, error) {
 	return s, err
 }
 
-// ListenAndServe starts the server, listening to server.ListeningAddr and handling inbound packets.
+// ListenAndServe starts the server, listening to server.ListeningAddr and handling inbound packets. Once this is called,
+// changes on s are not guaranteed to have an effect.
 func (s server) ListenAndServe() {
 	s.log.V(1).Info("server started")
 	buffer := make([]byte, 2 * s.MaxPacketSize)
+
+	go s.sendKeepAlives()
 
 	for {
 		n, addr, err := s.conn.ReadFromUDP(buffer)
@@ -94,6 +99,50 @@ func (s server) handleConnection(id string, addr *net.UDPAddr) {
 	s.log.V(1).Info("wrote package to address with payload", logKeyAddr, addr.String(), "payload", payload)
 }
 
+func (s server) sendKeepAlives() {
+	if s.keepAlive < 0 {
+		return
+	}
+
+	// TODO: optimize this to not send all packets at once
+	for {
+		time.Sleep(s.keepAlive)
+
+		addrs, err := s.AddrStore.FetchAllAddresses()
+		if err != nil {
+			s.log.Error(err, "could not fetch addresses")
+			continue
+		}
+
+		for _, addrStr := range addrs {
+			addr, err := net.ResolveUDPAddr(udpNetworkName, addrStr)
+			if err != nil {
+				s.log.V(1).Error(err, "could not resolve address when trying to send keep alive packet", logKeyAddr, addrStr)
+				continue
+			}
+
+			_, err = s.conn.WriteToUDP([]byte{}, addr)
+			if err != nil {
+				s.log.Error(err, "could not write to udp while trying to send keep alive packet, skipping for now", logKeyAddr, addr)
+				continue
+			}
+		}
+	}
+}
+
+// SetKeepAlive sets the time after which an address receives a keep alive packet in order to keep the NAT mapping intact.
+// If the value is negative, keep alive packets are disabled. t must not be greater than or equal 0 but be less than 1 s. If it is, it will be set to 1 s.
+func (s server) SetKeepAlive(t time.Duration) {
+	if 0 <= t && t < time.Second {
+		t = time.Second
+	}
+	s.keepAlive = t
+}
+
+func (s server) KeepAlive() time.Duration {
+	return s.keepAlive
+}
+
 // SetLogger takes a logr.Logger. If logger is nil or not of type logr.Logger, logs will be discarded and not put anywhere.
 // The default logger of this library uses the default Go log implementation and writes to std streams.
 func (s server) SetLogger(logger interface{}) {
@@ -106,6 +155,6 @@ func (s server) SetLogger(logger interface{}) {
 	s.log = l
 }
 
-func (s server) GetLogger() logr.Logger {
+func (s server) Logger() logr.Logger {
 	return s.log
 }

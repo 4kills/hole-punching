@@ -44,7 +44,7 @@ func Connect(id []byte, wellKnown string, expected int) ([]*net.UDPAddr, error) 
 		} else if err != nil {
 			return nil, err
 		}
-		if n == 0 {
+		if n == 0 { // possibly keep alive packet
 			continue
 		}
 
@@ -105,6 +105,10 @@ func connectIndividual(conn *net.UDPAddr, socket *net.UDPConn, wg *sync.WaitGrou
 		} else if err != nil {
 			panic(err)
 		}
+		if n == 0 { // keep alive packet
+			continue
+		}
+
 		str := string(readBuffer[:n])
 		fmt.Println(str)
 
