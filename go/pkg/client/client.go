@@ -13,21 +13,19 @@ import (
 
 const network = "udp"
 
-var timeout = time.Second * 7
-
 type client struct {
 	Timeout time.Duration
 
-	Socket        *net.UDPConn
-	InitialConnectTimeout time.Duration
+	MediatorServerRetryPeriod time.Duration
+	Socket                    *net.UDPConn
 
 	wellKnownHost         *net.UDPAddr
 }
 
 func New(wellKnownHost string) (client, error) {
 	c := client{
-		Timeout:               0,
-		InitialConnectTimeout: 100 * time.Millisecond,
+		Timeout:                   10 * time.Second,
+		MediatorServerRetryPeriod: 100 * time.Millisecond,
 	}
 
 	s, err := net.ListenUDP(network, &net.UDPAddr{})
@@ -46,39 +44,14 @@ func New(wellKnownHost string) (client, error) {
 }
 
 func (c client) Connect(id []byte, expected int) ([]*net.UDPAddr, *net.UDPConn , error) {
+	err := c.Socket.SetReadDeadline(time.Now().Add(c.Timeout))
+	if err != nil {
+		return nil, nil, err
+	}
 
-	readBuffer := make([]byte, 1<<16)
-	var remConns []*net.UDPAddr
-
-	// TODO add max tries/deadline/timeout
-	for {
-		time.Sleep(c.InitialConnectTimeout)
-
-		fmt.Println("Try") // TODO: remove this later
-		_, err := c.Socket.WriteToUDP(id, c.wellKnownHost)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		c.Socket.SetReadDeadline(time.Now().Add(timeout))
-		n, _, err := c.Socket.ReadFromUDP(readBuffer)
-		if errors.Is(err, os.ErrDeadlineExceeded) {
-			continue
-		} else if err != nil {
-			return nil, nil, err
-		}
-		if n == 0 { // possibly keep alive packet
-			continue
-		}
-
-		remConns, err = parse(readBuffer[:n])
-		if err != nil {
-			return nil, nil, err
-		}
-
-		if len(remConns) == expected {
-			break
-		}
+	remConns, err := c.connectToServer(id, expected)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	wg := &sync.WaitGroup{}
@@ -92,11 +65,63 @@ func (c client) Connect(id []byte, expected int) ([]*net.UDPAddr, *net.UDPConn ,
 	return remConns, c.Socket, nil
 }
 
+func (c client) connectToServer(id []byte, expected int) ([]*net.UDPAddr, error)  {
+	var remConns []*net.UDPAddr
+	readBuffer := make([]byte, 0xffff)
+
+	chanErr := make(chan error, 1)
+	defer close(chanErr)
+
+	go func() {
+		for {
+			select {
+			case <- chanErr:
+				return
+			default:
+				_, err := c.Socket.WriteToUDP(id, c.wellKnownHost)
+				if err != nil {
+					chanErr <- err
+					return
+				}
+
+				time.Sleep(c.MediatorServerRetryPeriod)
+			}
+		}
+	}()
+
+	for {
+		select {
+		case err := <- chanErr:
+			return nil, err
+		default:
+			n, inboundAddr, err := c.Socket.ReadFromUDP(readBuffer)
+			if errors.Is(err, os.ErrDeadlineExceeded) {
+				return nil, fmt.Errorf("%w: timeout after %s: %v", ErrTimeoutDuringServerConnect, c.Timeout.String(), err)
+			} else if err != nil {
+				return nil, err
+			}
+			if n == 0 { // possibly keep alive packet
+				continue
+			}
+
+			if inboundAddr.String() != c.wellKnownHost.String() {
+				continue
+			}
+
+			remConns, err = parse(readBuffer[:n])
+			if err != nil {
+				return nil, err
+			}
+
+			if len(remConns) == expected {
+				return remConns, nil
+			}
+		}
+	}
+}
+
 func (c client) connectIndividual(peer *net.UDPAddr, wg *sync.WaitGroup) {
 	readBuffer := make([]byte, 0xffff) // TODO: adjust size
-	// TODO: deadline wont work across multiple goroutines simultaneously
-	c.Socket.SetReadDeadline(time.Now().Add(timeout))
-	fmt.Println("Try sending packet to " + peer.String()) // TODO: remove this
 
 	msgChan := make(chan string, 1)
 	msgChan <- "SYN"
