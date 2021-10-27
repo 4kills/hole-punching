@@ -1,6 +1,7 @@
 package client
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -14,9 +15,12 @@ import (
 const network = "udp"
 
 type client struct {
+	// Timeout sets the duration after which client.Connect will time out and return with an error. If the value is negative,
+	// client.Connect will never time out.
 	Timeout time.Duration
 
 	MediatorServerRetryPeriod time.Duration
+	PeerRetryPeriod			  time.Duration
 	Socket                    *net.UDPConn
 
 	wellKnownHost         *net.UDPAddr
@@ -26,6 +30,7 @@ func New(wellKnownHost string) (client, error) {
 	c := client{
 		Timeout:                   10 * time.Second,
 		MediatorServerRetryPeriod: 100 * time.Millisecond,
+		PeerRetryPeriod: 		   100 * time.Millisecond,
 	}
 
 	s, err := net.ListenUDP(network, &net.UDPAddr{})
@@ -44,9 +49,11 @@ func New(wellKnownHost string) (client, error) {
 }
 
 func (c client) Connect(id []byte, expected int) ([]*net.UDPAddr, *net.UDPConn , error) {
-	err := c.Socket.SetReadDeadline(time.Now().Add(c.Timeout))
-	if err != nil {
-		return nil, nil, err
+	if c.Timeout >= 0 {
+		err := c.Socket.SetReadDeadline(time.Now().Add(c.Timeout))
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 
 	remConns, err := c.connectToServer(id, expected)
@@ -54,15 +61,9 @@ func (c client) Connect(id []byte, expected int) ([]*net.UDPAddr, *net.UDPConn ,
 		return nil, nil, err
 	}
 
-	wg := &sync.WaitGroup{}
-	for _, peer := range remConns {
-		wg.Add(1)
-		go c.connectIndividual(peer, wg)
-	}
+	err = c.connectPeers(remConns)
 
-	wg.Wait()
-
-	return remConns, c.Socket, nil
+	return remConns, c.Socket, err
 }
 
 func (c client) connectToServer(id []byte, expected int) ([]*net.UDPAddr, error)  {
@@ -120,17 +121,65 @@ func (c client) connectToServer(id []byte, expected int) ([]*net.UDPAddr, error)
 	}
 }
 
-func (c client) connectIndividual(peer *net.UDPAddr, wg *sync.WaitGroup) {
-	readBuffer := make([]byte, 0xffff) // TODO: adjust size
+func (c client) connectPeers(remConns []*net.UDPAddr) error {
+	readBuffer := make([]byte, 0xffff)
+	remotes := make(map[string]chan string)
+	cErr := make(chan error)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	wg := &sync.WaitGroup{}
+	defer cancel()
+
+	for _, peer := range remConns {
+		ch := make(chan string, 1)
+		remotes[peer.String()] = ch
+		wg.Add(1)
+		go c.connectIndividual(peer, ch, cErr, ctx, cancel, wg)
+	}
+
+	cWait := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(cWait)
+	}()
+
+	for {
+		select {
+		case <- cWait:
+			return nil
+		case err := <- cErr:
+			return err
+		default:
+			n, inbound, err := c.Socket.ReadFromUDP(readBuffer)
+			if errors.Is(err, os.ErrDeadlineExceeded) {
+				return fmt.Errorf("%w: timeout after %s: %v", ErrTimeoutDuringPeerConnect, c.Timeout.String(), err)
+			} else if err != nil {
+				return err
+			}
+			if n == 0 { // keep alive packet
+				continue
+			}
+
+			remotes[inbound.String()] <- string(readBuffer[:n])
+		}
+	}
+}
+
+func (c client) connectIndividual(peer *net.UDPAddr, ch chan string, cErr chan error, ctx context.Context, cancel context.CancelFunc, wg *sync.WaitGroup) {
+	syn := "SYN"
+	ack := "ACK"
 
 	msgChan := make(chan string, 1)
-	msgChan <- "SYN"
+	defer close(msgChan)
+	msgChan <- syn
 
 	go func() {
 		var ok bool
 		var msg string
 		for {
 			select {
+			case <- ctx.Done():
+				return
 			case msg, ok = <-msgChan:
 				if !ok {
 					return
@@ -138,41 +187,31 @@ func (c client) connectIndividual(peer *net.UDPAddr, wg *sync.WaitGroup) {
 			default:
 				_, err := c.Socket.WriteToUDP([]byte(msg), peer)
 				if err != nil {
-					panic(err) // TODO: change this behavior to sth sensical
+					cErr <- err
+					cancel()
+					return
 				}
 
-				time.Sleep(10 * time.Millisecond)
+				time.Sleep(c.PeerRetryPeriod)
 			}
 		}
 	}()
 
 	for {
-		// TODO: this will potentially not work because connection could be from s/o else
-		n, _, err := c.Socket.ReadFromUDP(readBuffer)
-		if errors.Is(err, os.ErrDeadlineExceeded) {
-			continue // TODO: change this
-		} else if err != nil {
-			panic(err)
+		select {
+		case <- ctx.Done():
+			return
+		case str := <- ch:
+			if str == syn {
+				msgChan <- ack
+			} else if str == ack {
+				wg.Done()
+				return
+			} else {
+				// log.Printf("warn: illegal request by %s with message: %s", peer.String(), str)
+			}
 		}
-		if n == 0 { // keep alive packet
-			continue
-		}
-
-		str := string(readBuffer[:n])
-		fmt.Println(str)
-
-		if str == "SYN" {
-			msgChan <- "ACK"
-		} else if str == "ACK" {
-			close(msgChan)
-			break
-		} else {
-			log.Printf("warn: illegal request by %s with message: %s", peer.String(), str)
-		}
-
 	}
-
-	wg.Done()
 }
 
 func parse(content []byte) ([]*net.UDPAddr, error) {
