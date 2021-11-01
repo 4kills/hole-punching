@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"net"
 	"os"
 	"strings"
@@ -169,33 +168,8 @@ func (c client) connectIndividual(peer *net.UDPAddr, ch chan string, cErr chan e
 	syn := "SYN"
 	ack := "ACK"
 
-	msgChan := make(chan string, 1)
-	defer close(msgChan)
-	msgChan <- syn
-
-	go func() {
-		var ok bool
-		var msg string
-		for {
-			select {
-			case <- ctx.Done():
-				return
-			case msg, ok = <-msgChan:
-				if !ok {
-					return
-				}
-			default:
-				_, err := c.Socket.WriteToUDP([]byte(msg), peer)
-				if err != nil {
-					cErr <- err
-					cancel()
-					return
-				}
-
-				time.Sleep(c.PeerRetryPeriod)
-			}
-		}
-	}()
+	msg := syn
+	retryPeriod := time.Duration(0)
 
 	for {
 		select {
@@ -203,12 +177,19 @@ func (c client) connectIndividual(peer *net.UDPAddr, ch chan string, cErr chan e
 			return
 		case str := <- ch:
 			if str == syn {
-				msgChan <- ack
+				msg = ack
 			} else if str == ack {
 				wg.Done()
 				return
-			} else {
-				// log.Printf("warn: illegal request by %s with message: %s", peer.String(), str)
+			}
+		case <-time.After(retryPeriod):
+			retryPeriod = c.PeerRetryPeriod
+			fmt.Println("sending")
+			_, err := c.Socket.WriteToUDP([]byte(msg), peer)
+			if err != nil {
+				cErr <- err
+				cancel()
+				return
 			}
 		}
 	}
