@@ -35,7 +35,7 @@ type server struct {
 func New(listeningAddr string) (server, error) {
 	s := server{
 		ListeningAddr: listeningAddr,
-		DomainTimeout: 2 * time.Minute,
+		DomainTimeout: 40 * time.Second,
 		keepAlive: 10 * time.Second,
 		MaxPacketSize: 1024,
 		AddrStore:     domainAddrMap{make(map[string][]string), &sync.Mutex{}, make([]string, 1024)},
