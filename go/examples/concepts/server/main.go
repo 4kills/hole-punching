@@ -3,7 +3,7 @@ package main
 import "net"
 
 const network = "udp"
-const wellKownAddr = ":5000"
+const wellKownAddr = ":5050"
 
 func main() {
 	laddr, _ := net.ResolveUDPAddr(network, wellKownAddr)

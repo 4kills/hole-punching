@@ -3,6 +3,7 @@ version: "3"
 services:
   hole_punching_server:
     build:
+      context: .
       dockerfile: Dockerfile
     container_name: hole_punching_concept_server
     restart: unless-stopped

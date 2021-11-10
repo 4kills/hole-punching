@@ -2,7 +2,7 @@ FROM golang AS builder
 LABEL stage=intermediate
 COPY . /concept-server
 WORKDIR /concept-server
-ENV GO111MODULE=on
+ENV GO111MODULE=off
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /main .
 
 FROM alpine:latest
