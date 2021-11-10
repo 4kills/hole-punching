@@ -9,15 +9,19 @@ import (
 )
 
 const network = "udp"
-const serverHost = "dominik-ochs.de:5000"
+const serverHost = "dominik-ochs.de:5050" // "127.0.0.1:5050"//
 
 func main() {
     conn, peer := establishConnection()
 
     go func() {
         b := make([]byte, 0xffff)
-        n, _, _ := conn.ReadFromUDP(b)
-        fmt.Println("Peer:", b[:n])
+        for {
+            n, _, _ := conn.ReadFromUDP(b)
+            if n > 0 {
+                fmt.Println("Peer:", string(b[:n]))
+            }
+        }
     }()
 
     scanner := bufio.NewScanner(os.Stdin)
@@ -42,7 +46,6 @@ func establishConnection() (*net.UDPConn, *net.UDPAddr) {
     // fetch remote addr
     peerAddr, _ := net.ResolveUDPAddr(network, string(b[:n]))
 
-    // TODO: does this work?
     // send datagram to peer
     for i := 0; i < 2; i++ {
         time.Sleep(time.Millisecond * 70)
