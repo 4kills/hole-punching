@@ -8,4 +8,4 @@ services:
     container_name: hole_punching_concept_server
     restart: unless-stopped
     ports:
-      - "5050:5050/udp"
+      - "5001:5001/udp"

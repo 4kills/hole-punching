@@ -1,19 +1,34 @@
 package main
 
-import "net"
+import (
+	"log"
+	"net"
+)
 
 const network = "udp"
-const wellKownAddr = ":5050"
+const wellKownAddr = ":5001"
 
 func main() {
-	laddr, _ := net.ResolveUDPAddr(network, wellKownAddr)
-	conn, _ := net.ListenUDP(network, laddr)
+	laddr, err := net.ResolveUDPAddr(network, wellKownAddr)
+	if err != nil {
+		log.Println(err)
+	}
+	conn, err := net.ListenUDP(network, laddr)
+	if err != nil {
+		log.Println(err)
+	}
 
 	b := make([]byte, 0xff)
 
 	for {
-		_, fst, _ := conn.ReadFromUDP(b)
-		_, snd, _ := conn.ReadFromUDP(b)
+		_, fst, err := conn.ReadFromUDP(b)
+		if err != nil {
+			log.Println(err)
+		}
+		_, snd, err := conn.ReadFromUDP(b)
+		if err != nil {
+			log.Println(err)
+		}
 
 		conn.WriteToUDP([]byte(snd.String()), fst)
 		conn.WriteToUDP([]byte(fst.String()), snd)

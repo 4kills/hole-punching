@@ -2,14 +2,14 @@ package main
 
 import (
     "bufio"
-    "fmt"
+    "log"
     "net"
     "os"
     "time"
 )
 
 const network = "udp"
-const serverHost = "dominik-ochs.de:5050" // "127.0.0.1:5050"//
+const serverHost = "127.0.0.1:5001" // "dominik-ochs.de:5001" //
 
 func main() {
     conn, peer := establishConnection()
@@ -19,7 +19,7 @@ func main() {
         for {
             n, _, _ := conn.ReadFromUDP(b)
             if n > 0 {
-                fmt.Println("Peer:", string(b[:n]))
+                log.Println("Peer:", string(b[:n]))
             }
         }
     }()
@@ -28,15 +28,15 @@ func main() {
     for scanner.Scan() {
         msg := scanner.Text()
         conn.WriteToUDP([]byte(msg), peer)
-        fmt.Println("Me:", msg)
+        log.Println("Me:", msg)
     }
 }
 
 func establishConnection() (*net.UDPConn, *net.UDPAddr) {
     conn, _ := net.ListenUDP(network, nil)
 
-    serverAddr, _ := net.ResolveUDPAddr(network, serverHost)
     // Write to server
+    serverAddr, _ := net.ResolveUDPAddr(network, serverHost)
     conn.WriteToUDP([]byte{}, serverAddr)
 
     // Listen for server response with peer's remote address
