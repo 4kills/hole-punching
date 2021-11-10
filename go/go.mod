@@ -1,4 +1,4 @@
-module github.com/4kills/hole-punching
+module github.com/4kills/hole-punching/go
 
 go 1.16
 

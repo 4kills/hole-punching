@@ -1,7 +1,7 @@
 package main
 
 import (
-    "github.com/4kills/hole-punching/pkg/server"
+    "github.com/4kills/hole-punching/go/pkg/server"
     "github.com/go-logr/stdr"
 )
 

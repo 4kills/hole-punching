@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/4kills/hole-punching/pkg/client"
+	"github.com/4kills/hole-punching/go/pkg/client"
 	"log"
 )
 
