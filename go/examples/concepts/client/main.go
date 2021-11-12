@@ -9,9 +9,13 @@ import (
 )
 
 const network = "udp"
-const serverHost = "127.0.0.1:5001" // "dominik-ochs.de:5001" //
+var serverHost = "127.0.0.1:5001"
 
 func main() {
+    if len(os.Args) > 1 {
+        serverHost = os.Args[1]
+    }
+
     conn, peer := establishConnection()
 
     go func() {

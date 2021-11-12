@@ -3,12 +3,17 @@ package main
 import (
 	"log"
 	"net"
+	"os"
 )
 
 const network = "udp"
-const wellKownAddr = ":5001"
+var wellKownAddr = ":5001"
 
 func main() {
+	if len(os.Args) > 1 {
+		wellKownAddr = os.Args[1]
+	}
+
 	laddr, err := net.ResolveUDPAddr(network, wellKownAddr)
 	if err != nil {
 		log.Println(err)
