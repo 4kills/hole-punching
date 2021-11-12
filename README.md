@@ -8,7 +8,7 @@ These libraries will perform the hole punching and establish the connections.
 After that you may do as you please with these connections.
 
 Feel free to navigate to the respective language directories for more information 
-as well as to the [docs](./docs) for an overview and the basic concepts of hole punching. 
+as well as to the [docs](./docs) for an overview and the [basic concepts of hole punching](./docs/README.md). 
 
 ## Supported Protocols and Languages
 - UDP
