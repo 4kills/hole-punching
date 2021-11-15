@@ -25,7 +25,7 @@ or
 ```
 go run ./client [rendezvous] 
 ```
-where rendezvous := `(<IP>|<FQDN>)?:<port>`. 
+with rendezvous defined [here](../../README.md#chat-client). 
 It defaults to rendezvous = `localhost:5001`. 
 
 ### Server
