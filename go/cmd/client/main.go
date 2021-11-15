@@ -41,10 +41,15 @@ func initConnection() (chat, error) {
 }
 
 func main() {
+	log.Println("Attempting to establish connection...")
+
 	c, err := initConnection()
 	if err != nil {
 		panic(err)
 	}
+
+	log.Println("Connection established with", len(c.addrs), "peers.")
+	time.Sleep(time.Second * 2)
 
 	go c.keepAlive()
 
@@ -60,10 +65,13 @@ func (c chat) receive() {
 	}
 
 	b := make([]byte, 0xffff)
+	t := time.Now()
 
 	for {
 		n, p, _ := c.socket.ReadFromUDP(b)
 		if n == 0 {
+			continue
+		} else if n == 3 && (string(b[:n]) == "ACK" || string(b[:n]) == "SYN") && t.Add(time.Millisecond * 200).After(time.Now()) {
 			continue
 		}
 
