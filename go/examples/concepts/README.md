@@ -3,9 +3,14 @@
 This example implements a simple peer-to-peer chat 
 which utilizes the basic concept of
 UDP hole punching exactly as described in
-[the concept document].  
-See the visualization here.
-    ! [UDP hole punching concept]()
+[the concept document](../../../docs/README.md).  
+<details>
+  <summary>See the visualization here.</summary>
+
+  ![UDP hole punching concept](../../../docs/media/udp-hole-punching-concept.png)
+
+</details>
+
   
 ## Usage
 
@@ -36,6 +41,6 @@ go run ./server [laddr]
 where laddr := `<rendezvous>`. 
 It defaults to laddr = `:5001`.
 
-When the server is started via `. /server/docker-compose.yml` (or the Dockerfile) 
+When the server is started via `./server/docker-compose.yml` (or the Dockerfile) 
 and any other laddr than the default is desired, the Dockerfile as well as the docker-compose 
 have to be adjusted accordingly (entry point, port mapping). 
