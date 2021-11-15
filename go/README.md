@@ -24,7 +24,7 @@ with
 
 | Parameter | Description | Domain |
 |:---------:|:-----------:|:------:|
-| rendezvous | well-known address of the rendezvous server | `(<IP>|<FQDN>)?:<port>`  |  
+| rendezvous | well-known address of the rendezvous server | <code>(\<IP>&#124;\<FQDN>)?:\<port></code>  |  
 | domain_id | id which is used by the clients to identify their chat session | `.+` |
 | num_peers | number of participants expected to join the chat session | positive integer | 
 
